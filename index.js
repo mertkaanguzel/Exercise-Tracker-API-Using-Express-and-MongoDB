@@ -10,9 +10,17 @@ const user = require('./models/user');
 app.use(cors());
 app.use(express.static('public'));
 app.use(bodyParser.urlencoded({extended : false}));
+
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html')
 });
+
+app.get('/api/users', async (req, res) => {
+  let userList = await user.find();
+  userList = listUserInfos(userList);
+  res.json(userList);
+});
+
 
 app.post('/api/users', async (req, res) => {
   const userName = req.body.username;
@@ -20,19 +28,16 @@ app.post('/api/users', async (req, res) => {
     name : userName
   });
   await userInstance.save();
-  res.json({username : userName,
+
+  res.json({
+    username : userName,
     _id : userInstance._id
   });
 });
 
 app.post('/api/users/:_id/exercises', async (req, res) => {
   const userId = req.params._id;
-  let exerciseObject = {
-    _id : userId,
-    description : req.body.description,
-    duration : req.body.duration,
-    date : req.body.date,
-  };
+ 
   try {
     let userInstance = await user.findByIdAndUpdate(userId,
       {'$push': {'exerciseList': {description : req.body.description,
@@ -42,9 +47,6 @@ app.post('/api/users/:_id/exercises', async (req, res) => {
       { "new": true, "upsert": true 
     });
 
-      //let userInstance = await user.findByIdAndUpdate(userId);
-      //res.json(userInstance.exerciseList.length);
-      //res.json(userInstance);
       res.json({
         _id : userId,
         username : userInstance.name,
@@ -59,24 +61,20 @@ app.post('/api/users/:_id/exercises', async (req, res) => {
 });
 
 app.get('/api/users/:_id/logs', async (req, res) => {
-  //res.json({test: req.query.limit});
   const userId = req.params._id;
-  console.log(req.query.limit);
-  console.log(typeof req.query.limit);
-  try {
 
+  try {
       let userInstance = await user.findByIdAndUpdate(userId);
       let exerciseList =  filterExercises(req.query.from, req.query.to, req.query.limit, userInstance.exerciseList);
-      console.log(exerciseList);
+
       res.json({
         _id : userId,
         username : userInstance.name,
         count : exerciseList.length,
         log : exerciseList,
-        //log : exerciseList,
       });
-  
   }
+
   catch(error) {
     res.json(error);
   }
@@ -89,23 +87,27 @@ let filterExercises = (from, to, limit, exerciseList) => {
   if (from !== undefined) filteredList = filteredList.filter(exercise => new Date(exercise.date) > new Date(from));
   if (to !== undefined) filteredList = filteredList.filter(exercise => new Date(exercise.date) < new Date(to));
   if (limit !== undefined) filteredList = filteredList.slice(0,limit);
-  //console.log(filteredList);
+ 
   filteredList = filteredList.map((item) => {
+    let date = (!item.date) ? new Date() : new Date(item.date);
     return {
     description: item.description,
     duration: item.duration,
-    date: new Date(item.date).toDateString()
+    date: date.toDateString(),
   }});
-/*
-  for (let item of filteredList){
-    exercise = {
-      description: item.description,
-      duration: item.duration,
-      date: item.date
-    };
-  }
-  */
+
   return filteredList;
+}
+
+let listUserInfos = (userList) => {
+
+  userList = userList.map((user) => {
+    return {
+    username: user.name,
+    _id: user._id,
+  }});
+
+  return userList;
 }
 
 const listener = app.listen(process.env.PORT || 3000, () => {
